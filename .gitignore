@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+target/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Spring Boot
+*.jar
+*.war
+*.ear
+
+# Java
+*.class
+*.ctxt
+.mtj.tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
