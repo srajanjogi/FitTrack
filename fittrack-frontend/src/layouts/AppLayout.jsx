@@ -13,7 +13,11 @@ function AppLayout() {
           <h2 className="sidebar-title">Navigation</h2>
           <ul className="sidebar-menu">
             <li>
-              <NavLink to="/" end className={({ isActive }) => (isActive ? 'sidebar-link active' : 'sidebar-link')}>
+              <NavLink
+                to="/dashboard"
+                end
+                className={({ isActive }) => (isActive ? 'sidebar-link active' : 'sidebar-link')}
+              >
                 Dashboard
               </NavLink>
             </li>

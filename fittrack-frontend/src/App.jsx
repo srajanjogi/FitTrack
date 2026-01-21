@@ -15,11 +15,12 @@ import WorkoutSummaryPage from './pages/WorkoutSummaryPage'
 function App() {
   return (
     <Routes>
+      <Route path="/" element={<SignInPage />} />
       <Route path="/signin" element={<SignInPage />} />
       <Route path="/signup" element={<SignUpPage />} />
       <Route path="/workouts/summary" element={<WorkoutSummaryPage />} />
       <Route element={<AppLayout />}>
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/members" element={<MembersPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
         <Route path="/billing" element={<BillingPage />} />
