@@ -5,14 +5,22 @@ import com.fittrack.backend.auth.UserRepository;
 import com.fittrack.backend.workout.dto.WorkoutExerciseRequest;
 import com.fittrack.backend.workout.dto.WorkoutSessionRequest;
 import com.fittrack.backend.workout.dto.WorkoutSetRequest;
+import com.fittrack.backend.workout.dto.WorkoutTemplateResponse;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * API for saving workout sessions with exercises and sets.
@@ -129,6 +137,222 @@ public class WorkoutController {
         WorkoutSession saved = sessionRepository.save(session);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(saved.getId());
+    }
+
+    /**
+     * Get the 6 most recent workout sessions for a user as templates.
+     */
+    @GetMapping("/templates/{userId}")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> getRecentWorkoutTemplates(@PathVariable("userId") Long userId) {
+        try {
+            User user = userRepository.findById(userId)
+                    .orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+
+            List<WorkoutSession> sessions = sessionRepository.findRecentWorkoutsByUser(
+                    user, PageRequest.of(0, 6));
+            
+        // Eagerly load exercises, sets, and exercise definitions to avoid lazy loading issues
+        for (WorkoutSession session : sessions) {
+            if (session.getExercises() != null) {
+                session.getExercises().size(); // Trigger lazy loading
+                for (WorkoutExercise exercise : session.getExercises()) {
+                    if (exercise.getSets() != null) {
+                        exercise.getSets().size(); // Trigger lazy loading
+                    }
+                    // Also trigger loading of exercise definition
+                    if (exercise.getExerciseDefinition() != null) {
+                        exercise.getExerciseDefinition().getName(); // Trigger lazy loading
+                    }
+                }
+            }
+        }
+            
+            // Convert all sessions to templates (even if they have no exercises yet)
+            // The frontend will handle displaying them appropriately
+            List<WorkoutTemplateResponse> templates = sessions.stream()
+                    .map(this::convertToTemplate)
+                    .filter(template -> template.getExercises() != null && !template.getExercises().isEmpty())
+                    .limit(6)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(templates);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error fetching templates: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Debug endpoint to check workout sessions for a user.
+     */
+    @GetMapping("/debug/{userId}")
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> debugWorkouts(@PathVariable("userId") Long userId) {
+        User user = userRepository.findById(userId)
+                .orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+        }
+
+        List<WorkoutSession> sessions = sessionRepository.findRecentWorkoutsByUser(
+                user, PageRequest.of(0, 10));
+        
+        // Return basic info about sessions
+        List<java.util.Map<String, Object>> debugInfo = sessions.stream()
+                .map(session -> {
+                    java.util.Map<String, Object> info = new java.util.HashMap<>();
+                    info.put("id", session.getId());
+                    info.put("name", session.getName());
+                    info.put("endTime", session.getEndTime());
+                    info.put("exerciseCount", session.getExercises() != null ? session.getExercises().size() : 0);
+                    if (session.getExercises() != null && !session.getExercises().isEmpty()) {
+                        info.put("firstExercise", session.getExercises().get(0).getDisplayName());
+                        info.put("firstExerciseSetCount", session.getExercises().get(0).getSets() != null ? 
+                                session.getExercises().get(0).getSets().size() : 0);
+                    }
+                    return info;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(debugInfo);
+    }
+
+    private WorkoutTemplateResponse convertToTemplate(WorkoutSession session) {
+        WorkoutTemplateResponse template = new WorkoutTemplateResponse();
+        template.setId(session.getId());
+        template.setName(session.getName() != null ? session.getName() : "Workout");
+        template.setEndTime(session.getEndTime());
+
+        // Convert exercises to template info
+        List<WorkoutTemplateResponse.ExerciseTemplateInfo> exerciseInfos = new ArrayList<>();
+        
+        if (session.getExercises() != null && !session.getExercises().isEmpty()) {
+            exerciseInfos = session.getExercises().stream()
+                    .filter(ex -> ex.getSets() != null && !ex.getSets().isEmpty())
+                    .sorted((a, b) -> {
+                        if (a.getOrderIndex() != null && b.getOrderIndex() != null) {
+                            return a.getOrderIndex().compareTo(b.getOrderIndex());
+                        }
+                        return 0;
+                    })
+                    .map(ex -> {
+                        WorkoutTemplateResponse.ExerciseTemplateInfo info = new WorkoutTemplateResponse.ExerciseTemplateInfo();
+
+                        // Determine a base name for this exercise (used for both display name and inference)
+                        String baseName = ex.getDisplayName();
+                        if (baseName == null && ex.getExerciseDefinition() != null) {
+                            baseName = ex.getExerciseDefinition().getName();
+                        }
+                        if (baseName == null) {
+                            baseName = "Exercise";
+                        }
+
+                        info.setName(baseName);
+
+                        // Completed sets from this exercise, ordered by set number
+                        List<WorkoutSet> completedSets = ex.getSets().stream()
+                                .filter(s -> s.getWeightKg() != null && s.getReps() != null && s.isCompleted())
+                                .sorted((a, b) -> {
+                                    if (a.getSetNumber() != null && b.getSetNumber() != null) {
+                                        return a.getSetNumber().compareTo(b.getSetNumber());
+                                    }
+                                    return 0;
+                                })
+                                .collect(Collectors.toList());
+
+                        info.setSetCount(completedSets.size());
+
+                        // Map previous sets (weight + reps) for use in \"Previous\" column
+                        List<WorkoutTemplateResponse.PreviousSetInfo> previousSetInfos = completedSets.stream()
+                                .map(set -> {
+                                    WorkoutTemplateResponse.PreviousSetInfo ps = new WorkoutTemplateResponse.PreviousSetInfo();
+                                    ps.setWeightKg(set.getWeightKg());
+                                    ps.setReps(set.getReps());
+                                    return ps;
+                                })
+                                .collect(Collectors.toList());
+                        info.setPreviousSets(previousSetInfos);
+
+                        String muscleGroup = null;
+                        if (ex.getExerciseDefinition() != null) {
+                            muscleGroup = ex.getExerciseDefinition().getMuscleGroup();
+                            info.setEquipment(ex.getExerciseDefinition().getEquipment());
+                        }
+
+                        // Prefer explicit muscleGroup from DB; otherwise infer from the base name
+                        if (muscleGroup != null && !muscleGroup.trim().isEmpty()) {
+                            info.setMuscleGroup(muscleGroup);
+                        } else {
+                            info.setMuscleGroup(inferMuscleGroup(baseName));
+                        }
+
+                        return info;
+                    })
+                    .collect(Collectors.toList());
+        }
+        
+        template.setExercises(exerciseInfos);
+        return template;
+    }
+
+    /**
+     * Infer muscle group from exercise name if not available.
+     */
+    private String inferMuscleGroup(String exerciseName) {
+        if (exerciseName == null) {
+            return "Unknown";
+        }
+        String name = exerciseName.toLowerCase();
+
+        // Explicit mappings for common exercises we seeded
+        if (name.contains("ab wheel rollout")) {
+            return "Core";
+        }
+        if (name.contains("back extension")) {
+            return "Back";
+        }
+        if (name.contains("lat pulldown")) {
+            return "Back";
+        }
+        if (name.contains("bench press")) {
+            return "Chest";
+        }
+        if (name.contains("squat")) {
+            return "Legs";
+        }
+        if (name.contains("deadlift")) {
+            return "Full body";
+        }
+        if (name.contains("chest") || name.contains("bench") || name.contains("push-up") || name.contains("fly")) {
+            return "Chest";
+        }
+        if (name.contains("back") || name.contains("row") || name.contains("pulldown") || name.contains("pull-up") || name.contains("chin-up")) {
+            return "Back";
+        }
+        if (name.contains("leg") || name.contains("squat") || name.contains("lunge") || name.contains("press") && (name.contains("leg") || name.contains("calf"))) {
+            return "Legs";
+        }
+        if (name.contains("shoulder") || name.contains("lateral raise") || name.contains("front raise")) {
+            return "Shoulders";
+        }
+        if (name.contains("bicep") || name.contains("curl")) {
+            return "Arms";
+        }
+        if (name.contains("tricep") || name.contains("extension") || name.contains("pushdown")) {
+            return "Arms";
+        }
+        if (name.contains("cardio") || name.contains("run") || name.contains("bike") || name.contains("elliptical") || name.contains("treadmill")) {
+            return "Cardio";
+        }
+        if (name.contains("core") || name.contains("ab") || name.contains("crunch") || name.contains("plank") || name.contains("sit-up")) {
+            return "Core";
+        }
+        return "Unknown";
     }
 }
 

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 function WorkoutSessionPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const template = location.state?.template // Get template from navigation state
   const today = new Date()
   const formattedDate = today.toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -24,6 +26,41 @@ function WorkoutSessionPage() {
   const [noteText, setNoteText] = useState('') // Temporary note text while editing
   const [startTime] = useState(Date.now()) // Track when workout started
   const [duration, setDuration] = useState(0) // Duration in seconds
+  const [saving, setSaving] = useState(false)
+
+  // Initialize exercises from template if provided
+  useEffect(() => {
+    if (template && template.exercises && template.exercises.length > 0) {
+      const initializedExercises = template.exercises.map((ex) => {
+        const previousSets = ex.previousSets || []
+
+        // Create the same number of sets as the previous workout, carrying over previous weight/reps
+        const sets = []
+        const count = ex.setCount ?? previousSets.length ?? 0
+        for (let i = 0; i < count; i++) {
+          const prev = previousSets[i] || {}
+          const prevWeight = prev.weightKg != null ? String(prev.weightKg) : ''
+          const prevReps = prev.reps != null ? String(prev.reps) : ''
+
+          sets.push({
+            id: i + 1,
+            weight: '',
+            reps: '',
+            prevWeight,
+            prevReps,
+            confirmed: false,
+          })
+        }
+
+        return {
+          name: ex.name,
+          sets,
+          note: '', // Start with empty note
+        }
+      })
+      setSessionExercises(initializedExercises)
+    }
+  }, [template])
 
   // Timer effect
   useEffect(() => {
@@ -364,7 +401,7 @@ function WorkoutSessionPage() {
     }
   }
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     // Calculate total weight lifted (weight × reps for all confirmed sets)
     let totalWeight = 0
     const exerciseSummaries = []
@@ -409,14 +446,62 @@ function WorkoutSessionPage() {
     localStorage.setItem('workoutCount', workoutCount.toString())
 
     // Store workout data for summary page
+    // Use template name if available, otherwise default to "Afternoon workout"
+    const workoutName = template?.name || 'Afternoon workout'
     const workoutData = {
-      name: 'Afternoon workout',
+      name: workoutName,
       date: fullDate,
       duration: formatDuration(duration),
       durationSeconds: duration,
       totalWeight: Math.round(totalWeight),
       exercises: exerciseSummaries,
       workoutCount,
+    }
+
+    // Try to persist workout to backend
+    try {
+      setSaving(true)
+      const storedUser = window.localStorage.getItem('fittrackUser')
+      const user = storedUser ? JSON.parse(storedUser) : null
+
+      if (user?.id) {
+        const payload = {
+          userId: user.id,
+          name: workoutName,
+          startTimeEpochMillis: startTime,
+          endTimeEpochMillis: Date.now(),
+          durationSeconds: workoutData.durationSeconds,
+          notes: null,
+          exercises: sessionExercises.map((ex, index) => ({
+            name: ex.name,
+            note: ex.note || null,
+            orderIndex: index + 1,
+            sets: ex.sets
+              .filter((set) => set.confirmed && set.weight && set.reps)
+              .map((set) => ({
+                setNumber: set.id,
+                weightKg: parseFloat(set.weight),
+                reps: parseInt(set.reps, 10),
+                completed: true,
+                previousWeightKg: set.prevWeight ? parseFloat(set.prevWeight) : null,
+                previousReps: set.prevReps ? parseInt(set.prevReps, 10) : null,
+              })),
+          })),
+        }
+
+        await fetch('http://localhost:8080/api/workouts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        })
+      }
+    } catch (err) {
+      // For now we just log the error; the UI still shows the summary based on local data.
+      console.error('Failed to save workout', err)
+    } finally {
+      setSaving(false)
     }
 
     // Store in sessionStorage to pass to summary page
@@ -432,12 +517,12 @@ function WorkoutSessionPage() {
         <div className="workout-session-header">
           <div className="workout-session-timer-icon">⏱</div>
           <button className="workout-session-finish" onClick={handleFinish}>
-            Finish
+            {saving ? 'Saving...' : 'Finish'}
           </button>
         </div>
 
         <div className="workout-session-title-block">
-          <h1>Afternoon workout</h1>
+          <h1>{template?.name || 'Afternoon workout'}</h1>
           <p className="workout-session-meta">
             <span>{formattedDate}</span>
             <span>{formatDuration(duration)}</span>
