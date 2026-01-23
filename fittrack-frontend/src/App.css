@@ -465,6 +465,14 @@
   gap: 0.9rem;
 }
 
+.workouts-template-grid-2x3 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(3, auto);
+  gap: 0.9rem;
+  max-width: 100%;
+}
+
 .workouts-template-card {
   background: #020617;
   border-radius: 0.9rem;
@@ -1370,26 +1378,23 @@
   position: relative;
 }
 
-.workout-summary-close {
+.workout-summary-exit-btn {
   position: absolute;
   top: 0;
   right: 0;
-  width: 40px;
-  height: 40px;
+  padding: 0.5rem 1rem;
   border-radius: 0.6rem;
   border: 1px solid #1f2937;
   background: #020617;
   color: #9ca3af;
-  font-size: 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transition: background 0.15s ease, border-color 0.15s ease;
   z-index: 10;
 }
 
-.workout-summary-close:hover {
+.workout-summary-exit-btn:hover {
   background: #111827;
   border-color: #374151;
   color: #e5e7eb;
@@ -1442,11 +1447,56 @@
   margin-bottom: 1.5rem;
 }
 
+.workout-summary-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+}
+
 .workout-summary-card-title {
   font-size: 1.3rem;
   font-weight: 600;
   color: #e5e7eb;
-  margin: 0 0 0.3rem 0;
+  margin: 0;
+}
+
+.workout-summary-favorite-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 0.5rem;
+  border: 1px solid #1f2937;
+  background: #0b1120;
+  color: #fbbf24;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.workout-summary-favorite-btn:hover {
+  background: #111827;
+  border-color: #374151;
+  transform: scale(1.05);
+}
+
+.workout-summary-favorite-btn:hover::after {
+  content: 'Add template as favourite';
+  position: absolute;
+  top: -35px;
+  right: 0;
+  background: #1f2937;
+  color: #e5e7eb;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  border: 1px solid #374151;
 }
 
 .workout-summary-card-date {

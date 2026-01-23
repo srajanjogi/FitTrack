@@ -49,13 +49,13 @@ function WorkoutSummaryPage() {
   return (
     <div className="workout-summary-root">
       <div className="workout-summary-container">
-        {/* Close button */}
+        {/* Exit button */}
         <button
-          className="workout-summary-close"
+          className="workout-summary-exit-btn"
           onClick={() => navigate('/workouts')}
-          aria-label="Close"
+          aria-label="Exit"
         >
-          ✕
+          Exit
         </button>
 
         {/* Achievement Section */}
@@ -82,7 +82,16 @@ function WorkoutSummaryPage() {
         {/* Workout Details Card */}
         <div className="workout-summary-card">
           <div className="workout-summary-card-header">
-            <h2 className="workout-summary-card-title">{workoutData.name}</h2>
+            <div className="workout-summary-card-title-row">
+              <h2 className="workout-summary-card-title">{workoutData.name}</h2>
+              <button
+                className="workout-summary-favorite-btn"
+                title="Add template as favourite"
+                aria-label="Add to favorites"
+              >
+                ⭐
+              </button>
+            </div>
             <p className="workout-summary-card-date">{workoutData.date}</p>
           </div>
 

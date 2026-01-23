@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 function WorkoutsPage() {
   const navigate = useNavigate()
   const [templates, setTemplates] = useState([])
+  const [favoriteTemplates, setFavoriteTemplates] = useState([])
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -154,9 +155,56 @@ function WorkoutsPage() {
           </button>
         </section>
 
+        {/* Favorite Templates Section */}
         <section className="workouts-section">
           <div className="workouts-section-header">
-            <h2 className="workouts-section-title">Templates</h2>
+            <h2 className="workouts-section-title">Favorite templates</h2>
+            <div className="workouts-section-actions">
+              <button className="workouts-chip-button">+ Template</button>
+            </div>
+          </div>
+
+          <p className="workouts-subtitle">
+            {loading ? 'Loading...' : `My favourite templates (${favoriteTemplates.length})`}
+          </p>
+
+          <div className="workouts-template-grid-2x3">
+            {Array.from({ length: 6 }, (_, index) => {
+              const tpl = favoriteTemplates[index]
+              return (
+                <div
+                  key={tpl?.id || `empty-${index}`}
+                  className="workouts-template-card"
+                  onClick={() => tpl && handleTemplateClick(tpl)}
+                  style={{ cursor: tpl ? 'pointer' : 'default', opacity: tpl ? 1 : 0.5 }}
+                >
+                  {tpl ? (
+                    <>
+                      <div className="workouts-template-header">
+                        <h3>{getTemplateTitle(tpl)}</h3>
+                      </div>
+                      <p className="workouts-template-description">
+                        {tpl.exercises?.length || 0} exercises
+                      </p>
+                      <p className="workouts-template-description">
+                        ⏱ {formatDate(tpl.endTime)}
+                      </p>
+                    </>
+                  ) : (
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <p style={{ color: '#6b7280', fontSize: '0.85rem', margin: 0 }}>No data</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* Previous Templates Section */}
+        <section className="workouts-section">
+          <div className="workouts-section-header">
+            <h2 className="workouts-section-title">Previous templates</h2>
             <div className="workouts-section-actions">
               <button className="workouts-chip-button">+ Template</button>
             </div>
@@ -166,32 +214,37 @@ function WorkoutsPage() {
             {loading ? 'Loading templates...' : `My templates (${templates.length})`}
           </p>
 
-          {templates.length === 0 && !loading ? (
-            <p style={{ color: '#9ca3af', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-              No workout templates yet. Finish a workout to create your first template!
-            </p>
-          ) : (
-            <div className="workouts-template-grid">
-              {templates.map((tpl) => (
+          <div className="workouts-template-grid-2x3">
+            {Array.from({ length: 6 }, (_, index) => {
+              const tpl = templates[index]
+              return (
                 <div
-                  key={tpl.id}
+                  key={tpl?.id || `empty-${index}`}
                   className="workouts-template-card"
-                  onClick={() => handleTemplateClick(tpl)}
-                  style={{ cursor: 'pointer' }}
+                  onClick={() => tpl && handleTemplateClick(tpl)}
+                  style={{ cursor: tpl ? 'pointer' : 'default', opacity: tpl ? 1 : 0.5 }}
                 >
-                  <div className="workouts-template-header">
-                    <h3>{getTemplateTitle(tpl)}</h3>
-                  </div>
-                  <p className="workouts-template-description">
-                    {tpl.exercises?.length || 0} exercises
-                  </p>
-                  <p className="workouts-template-description">
-                    ⏱ {formatDate(tpl.endTime)}
-                  </p>
+                  {tpl ? (
+                    <>
+                      <div className="workouts-template-header">
+                        <h3>{getTemplateTitle(tpl)}</h3>
+                      </div>
+                      <p className="workouts-template-description">
+                        {tpl.exercises?.length || 0} exercises
+                      </p>
+                      <p className="workouts-template-description">
+                        ⏱ {formatDate(tpl.endTime)}
+                      </p>
+                    </>
+                  ) : (
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <p style={{ color: '#6b7280', fontSize: '0.85rem', margin: 0 }}>No data</p>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              )
+            })}
+          </div>
         </section>
       </div>
 
