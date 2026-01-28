@@ -7,6 +7,7 @@ function WorkoutsPage() {
   const [favoriteTemplates, setFavoriteTemplates] = useState([])
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [openFavoriteMenuId, setOpenFavoriteMenuId] = useState(null)
 
   function getTemplateTitle(template) {
     if (!template?.exercises || template.exercises.length === 0) {
@@ -91,7 +92,7 @@ function WorkoutsPage() {
       if (user?.id) {
         console.log('Fetching templates for user ID:', user.id)
         const res = await fetch(`http://localhost:8080/api/workouts/templates/${user.id}`)
-        console.log('Response status:', res.status)
+        console.log('Response status (recent):', res.status)
         if (res.ok) {
           const data = await res.json()
           console.log('Templates received:', data)
@@ -99,6 +100,20 @@ function WorkoutsPage() {
         } else {
           const errorText = await res.text()
           console.error('Failed to fetch templates:', res.status, errorText)
+        }
+
+        // Fetch favourite templates separately
+        const favRes = await fetch(
+          `http://localhost:8080/api/workouts/favorites/${user.id}`,
+        )
+        console.log('Response status (favorites):', favRes.status)
+        if (favRes.ok) {
+          const favData = await favRes.json()
+          console.log('Favorite templates received:', favData)
+          setFavoriteTemplates(favData)
+        } else {
+          const favErrorText = await favRes.text()
+          console.error('Failed to fetch favourite templates:', favRes.status, favErrorText)
         }
       } else {
         console.log('No user ID found in localStorage')
@@ -131,6 +146,27 @@ function WorkoutsPage() {
     if (selectedTemplate) {
       // Navigate to workout session with template data
       navigate('/workouts/session', { state: { template: selectedTemplate } })
+    }
+  }
+
+  async function handleUnfavorite(templateId) {
+    try {
+      const res = await fetch(
+        `http://localhost:8080/api/workouts/${templateId}/favorite?value=false`,
+        {
+          method: 'POST',
+        },
+      )
+
+      if (res.ok) {
+        // Remove from favourites list locally
+        setFavoriteTemplates((prev) => prev.filter((tpl) => tpl.id !== templateId))
+      } else {
+        const errorText = await res.text()
+        console.error('Failed to unfavourite template:', res.status, errorText)
+      }
+    } catch (err) {
+      console.error('Error unfavouriting template', err)
     }
   }
 
@@ -182,7 +218,34 @@ function WorkoutsPage() {
                     <>
                       <div className="workouts-template-header">
                         <h3>{getTemplateTitle(tpl)}</h3>
+                        <button
+                          type="button"
+                          className="workouts-template-menu-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setOpenFavoriteMenuId(
+                              openFavoriteMenuId === tpl.id ? null : tpl.id,
+                            )
+                          }}
+                        >
+                          ⋯
+                        </button>
                       </div>
+                      {openFavoriteMenuId === tpl.id && (
+                        <div className="workouts-template-menu">
+                          <button
+                            type="button"
+                            className="workouts-template-menu-item"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleUnfavorite(tpl.id)
+                              setOpenFavoriteMenuId(null)
+                            }}
+                          >
+                            Remove from favourite
+                          </button>
+                        </div>
+                      )}
                       <p className="workouts-template-description">
                         {tpl.exercises?.length || 0} exercises
                       </p>

@@ -5,6 +5,8 @@ function WorkoutSummaryPage() {
   const navigate = useNavigate()
   const [workoutData, setWorkoutData] = useState(null)
   const [prCount, setPrCount] = useState(0)
+  const [isSavingFavorite, setIsSavingFavorite] = useState(false)
+  const [favoriteSaved, setFavoriteSaved] = useState(false)
 
   useEffect(() => {
     // Get workout data from sessionStorage
@@ -23,6 +25,33 @@ function WorkoutSummaryPage() {
     const prs = parsed.exercises.filter((ex) => ex.bestSet !== null).length
     setPrCount(prs)
   }, [navigate])
+
+  const handleAddToFavorites = async () => {
+    if (!workoutData?.sessionId || favoriteSaved || isSavingFavorite) {
+      return
+    }
+
+    try {
+      setIsSavingFavorite(true)
+      const res = await fetch(
+        `http://localhost:8080/api/workouts/${workoutData.sessionId}/favorite?value=true`,
+        {
+          method: 'POST',
+        },
+      )
+
+      if (res.ok) {
+        setFavoriteSaved(true)
+      } else {
+        // We just log for now; the workout is still saved as a normal session
+        console.error('Failed to mark workout as favourite', res.status)
+      }
+    } catch (err) {
+      console.error('Error marking workout as favourite', err)
+    } finally {
+      setIsSavingFavorite(false)
+    }
+  }
 
   if (!workoutData) {
     return null
@@ -86,10 +115,12 @@ function WorkoutSummaryPage() {
               <h2 className="workout-summary-card-title">{workoutData.name}</h2>
               <button
                 className="workout-summary-favorite-btn"
-                title="Add template as favourite"
-                aria-label="Add to favorites"
+              title={favoriteSaved ? 'Added to favourites' : 'Add template as favourite'}
+              aria-label="Add to favorites"
+              disabled={favoriteSaved || isSavingFavorite || !workoutData.sessionId}
+              onClick={handleAddToFavorites}
               >
-                ⭐
+              {favoriteSaved ? '✅' : '⭐'}
               </button>
             </div>
             <p className="workout-summary-card-date">{workoutData.date}</p>

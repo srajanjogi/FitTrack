@@ -459,6 +459,7 @@ function WorkoutSessionPage() {
     }
 
     // Try to persist workout to backend
+    let savedSessionId = null
     try {
       setSaving(true)
       const storedUser = window.localStorage.getItem('fittrackUser')
@@ -489,13 +490,20 @@ function WorkoutSessionPage() {
           })),
         }
 
-        await fetch('http://localhost:8080/api/workouts', {
+        const res = await fetch('http://localhost:8080/api/workouts', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(payload),
         })
+
+        if (res.ok) {
+          // Backend returns the new session ID in the response body
+          savedSessionId = await res.json()
+        } else {
+          console.error('Failed to save workout', res.status)
+        }
       }
     } catch (err) {
       // For now we just log the error; the UI still shows the summary based on local data.
@@ -505,7 +513,14 @@ function WorkoutSessionPage() {
     }
 
     // Store in sessionStorage to pass to summary page
-    sessionStorage.setItem('workoutSummary', JSON.stringify(workoutData))
+    sessionStorage.setItem(
+      'workoutSummary',
+      JSON.stringify({
+        ...workoutData,
+        // Persist backend session id so we can mark this workout as favourite later
+        sessionId: savedSessionId,
+      }),
+    )
 
     // Navigate to summary page
     navigate('/workouts/summary')
@@ -617,18 +632,22 @@ function WorkoutSessionPage() {
                 <div className="workout-exercise-table">
                   <div className="workout-exercise-row workout-exercise-row-head">
                     <span>Set</span>
-                    <span>Previous</span>
+                    {template && <span>Previous</span>}
                     <span>+kg</span>
                     <span>Reps</span>
                     <span />
                   </div>
                   {ex.sets.map((set, idx) => {
-                    const hasPrev = set.prevWeight && set.prevReps
-                    const prevLabel = hasPrev ? `${set.prevWeight} kg x ${set.prevReps}` : '—'
                     return (
                       <div key={set.id} className="workout-exercise-row">
                         <span className="workout-set-pill">{idx + 1}</span>
-                        <span className="workout-exercise-prev">{prevLabel}</span>
+                        {template && (
+                          <span className="workout-exercise-prev">
+                            {set.prevWeight && set.prevReps
+                              ? `${set.prevWeight} kg x ${set.prevReps}`
+                              : '—'}
+                          </span>
+                        )}
                         <input
                           className="workout-input"
                           placeholder="kg"
@@ -682,7 +701,11 @@ function WorkoutSessionPage() {
           >
             Add exercises
           </button>
-          <button className="workout-session-secondary" type="button">
+          <button
+            className="workout-session-secondary"
+            type="button"
+            onClick={() => navigate('/workouts')}
+          >
             Cancel workout
           </button>
         </div>
