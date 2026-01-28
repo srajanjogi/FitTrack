@@ -6,6 +6,8 @@ import com.fittrack.backend.workout.dto.WorkoutExerciseRequest;
 import com.fittrack.backend.workout.dto.WorkoutSessionRequest;
 import com.fittrack.backend.workout.dto.WorkoutSetRequest;
 import com.fittrack.backend.workout.dto.WorkoutTemplateResponse;
+import com.fittrack.backend.workout.dto.AttendanceStatsResponse;
+import com.fittrack.backend.workout.dto.AttendanceVisitResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,11 +17,16 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -184,8 +191,53 @@ public class WorkoutController {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error fetching templates: " + e.getMessage());
-        }
-    }
+		}
+	}
+
+	/**
+	 * Get up to 6 favourite workout sessions for a user as templates.
+	 */
+	@GetMapping("/favorites/{userId}")
+	@Transactional(readOnly = true)
+	public ResponseEntity<?> getFavoriteWorkoutTemplates(@PathVariable("userId") Long userId) {
+		try {
+			User user = userRepository.findById(userId)
+					.orElse(null);
+			if (user == null) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+			}
+
+			List<WorkoutSession> sessions = sessionRepository.findFavoriteWorkoutsByUser(
+					user, PageRequest.of(0, 6));
+
+			// Eagerly load relationships similar to recent templates
+			for (WorkoutSession session : sessions) {
+				if (session.getExercises() != null) {
+					session.getExercises().size();
+					for (WorkoutExercise exercise : session.getExercises()) {
+						if (exercise.getSets() != null) {
+							exercise.getSets().size();
+						}
+						if (exercise.getExerciseDefinition() != null) {
+							exercise.getExerciseDefinition().getName();
+						}
+					}
+				}
+			}
+
+			List<WorkoutTemplateResponse> templates = sessions.stream()
+					.map(this::convertToTemplate)
+					.filter(template -> template.getExercises() != null && !template.getExercises().isEmpty())
+					.limit(6)
+					.collect(Collectors.toList());
+
+			return ResponseEntity.ok(templates);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body("Error fetching favourite templates: " + e.getMessage());
+		}
+	}
 
     /**
      * Debug endpoint to check workout sessions for a user.
@@ -221,6 +273,146 @@ public class WorkoutController {
 
         return ResponseEntity.ok(debugInfo);
     }
+
+	/**
+	 * Mark or unmark a workout session as favourite.
+	 */
+	@PostMapping("/{sessionId}/favorite")
+	public ResponseEntity<?> setFavorite(
+			@PathVariable("sessionId") Long sessionId,
+			@RequestParam(name = "value", defaultValue = "true") boolean value
+	) {
+		WorkoutSession session = sessionRepository.findById(sessionId).orElse(null);
+		if (session == null) {
+			return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Session not found");
+		}
+
+		session.setFavorite(value);
+		sessionRepository.save(session);
+
+		return ResponseEntity.ok().build();
+	}
+
+	/**
+	 * Aggregate simple attendance statistics for a user based on workout sessions.
+	 */
+	@GetMapping("/attendance/stats/{userId}")
+	@Transactional(readOnly = true)
+	public ResponseEntity<?> getAttendanceStats(@PathVariable("userId") Long userId) {
+		User user = userRepository.findById(userId).orElse(null);
+		if (user == null) {
+			return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+		}
+
+		List<WorkoutSession> sessions = sessionRepository.findByUserOrderByStartTimeAsc(user);
+		if (sessions.isEmpty()) {
+			AttendanceStatsResponse empty = new AttendanceStatsResponse();
+			empty.setVisitsThisMonth(0);
+			empty.setCurrentStreakDays(0);
+			empty.setTotalVisits(0);
+			empty.setAverageDurationSeconds(0);
+			return ResponseEntity.ok(empty);
+		}
+
+		ZoneId zone = ZoneId.systemDefault();
+		LocalDate now = LocalDate.now(zone);
+
+		// Map sessions to their workout date (based on endTime if present, otherwise startTime)
+		List<LocalDate> sessionDates = new ArrayList<>();
+		long totalDurationSeconds = 0L;
+		int sessionsWithDuration = 0;
+
+		for (WorkoutSession s : sessions) {
+			Instant endOrStart = s.getEndTime() != null ? s.getEndTime() : s.getStartTime();
+			if (endOrStart != null) {
+				sessionDates.add(endOrStart.atZone(zone).toLocalDate());
+			}
+			if (s.getDurationSeconds() != null) {
+				totalDurationSeconds += s.getDurationSeconds();
+				sessionsWithDuration++;
+			}
+		}
+
+		// Total visits = total sessions
+		long totalVisits = sessions.size();
+
+		// Visits this month = distinct days in current month with at least one session
+		Set<LocalDate> uniqueDaysThisMonth = new LinkedHashSet<>();
+		for (LocalDate date : sessionDates) {
+			if (date.getYear() == now.getYear() && date.getMonth() == now.getMonth()) {
+				uniqueDaysThisMonth.add(date);
+			}
+		}
+
+		// Current streak: consecutive days ending at the most recent workout day
+		// Use distinct sorted dates descending
+		Set<LocalDate> uniqueAllDays = new LinkedHashSet<>(sessionDates);
+		List<LocalDate> sortedDistinct = new ArrayList<>(uniqueAllDays);
+		sortedDistinct.sort((a, b) -> b.compareTo(a)); // newest first
+
+		int streak = 0;
+		if (!sortedDistinct.isEmpty()) {
+			streak = 1;
+			LocalDate prev = sortedDistinct.get(0);
+			for (int i = 1; i < sortedDistinct.size(); i++) {
+				LocalDate current = sortedDistinct.get(i);
+				if (prev.minusDays(1).equals(current)) {
+					streak++;
+					prev = current;
+				} else {
+					break;
+				}
+			}
+		}
+
+		long avgDurationSeconds = 0L;
+		if (sessionsWithDuration > 0) {
+			avgDurationSeconds = totalDurationSeconds / sessionsWithDuration;
+		}
+
+		AttendanceStatsResponse response = new AttendanceStatsResponse();
+		response.setVisitsThisMonth(uniqueDaysThisMonth.size());
+		response.setCurrentStreakDays(streak);
+		response.setTotalVisits(totalVisits);
+		response.setAverageDurationSeconds(avgDurationSeconds);
+
+		return ResponseEntity.ok(response);
+	}
+
+	/**
+	 * Latest attendance visits (workout sessions) for a user, max 50.
+	 */
+	@GetMapping("/attendance/visits/{userId}")
+	@Transactional(readOnly = true)
+	public ResponseEntity<?> getAttendanceVisits(
+			@PathVariable("userId") Long userId,
+			@RequestParam(name = "limit", defaultValue = "50") int limit
+	) {
+		User user = userRepository.findById(userId).orElse(null);
+		if (user == null) {
+			return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+		}
+
+		if (limit <= 0 || limit > 50) {
+			limit = 50;
+		}
+
+		List<WorkoutSession> sessions = sessionRepository.findByUserOrderByStartTimeDesc(
+				user, PageRequest.of(0, limit));
+
+		List<AttendanceVisitResponse> visits = sessions.stream()
+				.map(s -> {
+					AttendanceVisitResponse v = new AttendanceVisitResponse();
+					v.setId(s.getId());
+					v.setStartTime(s.getStartTime());
+					v.setEndTime(s.getEndTime());
+					v.setDurationSeconds(s.getDurationSeconds());
+					return v;
+				})
+				.toList();
+
+		return ResponseEntity.ok(visits);
+	}
 
     private WorkoutTemplateResponse convertToTemplate(WorkoutSession session) {
         WorkoutTemplateResponse template = new WorkoutTemplateResponse();

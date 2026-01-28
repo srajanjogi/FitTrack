@@ -49,8 +49,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Allow both common Vite dev ports, since Vite moved from 5173 to 5174 for you
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:5174"));
+		// Allow common Vite dev ports (5173, 5174, 5175)
+		config.setAllowedOrigins(List.of(
+				"http://localhost:5173",
+				"http://localhost:5174",
+				"http://localhost:5175"
+		));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         config.setAllowCredentials(true);

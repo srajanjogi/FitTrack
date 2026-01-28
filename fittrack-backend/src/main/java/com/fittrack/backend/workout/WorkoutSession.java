@@ -47,6 +47,13 @@ public class WorkoutSession {
     @Column(nullable = true)
     private Long totalVolume;
 
+	/**
+	 * Whether this session has been marked as a favourite by the user.
+	 * Mapped to the existing {@code is_favorite} column in the database.
+	 */
+	@Column(name = "is_favorite", nullable = false)
+	private boolean favorite = false;
+
     @Column(columnDefinition = "text")
     private String notes;
 
@@ -111,6 +118,14 @@ public class WorkoutSession {
     public void setTotalVolume(Long totalVolume) {
         this.totalVolume = totalVolume;
     }
+
+	public boolean isFavorite() {
+		return favorite;
+	}
+
+	public void setFavorite(boolean favorite) {
+		this.favorite = favorite;
+	}
 
     public String getNotes() {
         return notes;
