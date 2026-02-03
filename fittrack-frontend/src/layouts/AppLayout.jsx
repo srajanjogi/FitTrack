@@ -23,26 +23,10 @@ function AppLayout() {
             </li>
             <li>
               <NavLink
-                to="/members"
-                className={({ isActive }) => (isActive ? 'sidebar-link active' : 'sidebar-link')}
-              >
-                Members
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
                 to="/attendance"
                 className={({ isActive }) => (isActive ? 'sidebar-link active' : 'sidebar-link')}
               >
                 Attendance
-              </NavLink>
-            </li>
-            <li>
-              <NavLink
-                to="/billing"
-                className={({ isActive }) => (isActive ? 'sidebar-link active' : 'sidebar-link')}
-              >
-                Billing
               </NavLink>
             </li>
             <li>
